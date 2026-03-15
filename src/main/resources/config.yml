@@ -1,0 +1,112 @@
+# The Hunt 插件配置文件
+# ScriptIrc 配置版本 - 每次修改配置结构时递增此值
+ScriptIrc-config-version: 1
+
+# 游戏设置
+game:
+  # 游戏时间（秒）
+  time: 600
+  # 大厅等待时间（秒）
+  lobby-wait-time: 30
+
+# 轮廓显示设置
+outline:
+  # 轮廓显示间隔（秒）
+  interval: 120
+  # 轮廓显示持续时间（秒）
+  duration: 10
+
+# 玩家设置
+players:
+  # 最小玩家数
+  min: 4
+  # 最大玩家数
+  max: 10
+  # 超过此人数时使用2名杀手
+  killer-threshold: 8
+
+# 世界设置
+worlds:
+  # 大厅世界
+  lobby: world
+  # 游戏世界
+  game: world
+
+# 出生点设置
+spawns:
+  # 杀手出生点（格式：世界名,x,y,z,yaw,pitch）
+  killer:
+    - "world,10,64,10,180,0"
+    - "world,-10,64,10,180,0"
+  
+  # 求生者出生点
+  survivor:
+    - "world,20,64,20,0,0"
+    - "world,-20,64,20,0,0"
+    - "world,20,64,-20,0,0"
+    - "world,-20,64,-20,0,0"
+  
+  # 资源点
+  resource:
+    - "world,30,64,30"
+    - "world,-30,64,30"
+    - "world,30,64,-30"
+    - "world,-30,64,-30"
+
+# 自定义物品（待扩展）
+items:
+  # 示例：杀手之刃
+  killer_sword:
+    material: IRON_SWORD
+    display-name: "&c杀手之刃"
+    lore:
+      - "&7杀手专用武器"
+      - "&6+10% 移动速度"
+      - "&6+20% 攻击伤害"
+    attributes:
+      generic.movement_speed: 0.10
+      generic.attack_damage: 0.20
+    enchantments:
+      DAMAGE_ALL: 2
+  
+  # 示例：速度药水
+  speed_potion:
+    material: POTION
+    display-name: "&b速度药水"
+    lore:
+      - "&7使用后获得速度效果"
+      - "&6持续时间: 30秒"
+    potion-type: SPEED
+    extended: false
+    upgraded: false
+
+# 音效设置
+sounds:
+  # 游戏开始音效
+  game-start: ENTITY_ENDER_DRAGON_GROWL
+  # 游戏结束音效（求生者获胜）
+  game-end-survivors: UI_TOAST_CHALLENGE_COMPLETE
+  # 游戏结束音效（杀手获胜）
+  game-end-killers: ENTITY_WITHER_DEATH
+  # 倒计时音效
+  countdown: BLOCK_NOTE_BLOCK_PLING
+  # 轮廓显示音效
+  outline: BLOCK_BELL_USE
+
+# 消息设置
+messages:
+  # 游戏开始消息
+  game-start: "&c=== 游戏开始！ ==="
+  # 游戏结束消息（求生者获胜）
+  game-end-survivors: "&a=== 游戏结束！求生者获胜！ ==="
+  # 游戏结束消息（杀手获胜）
+  game-end-killers: "&c=== 游戏结束！杀手获胜！ ==="
+  # 轮廓显示消息
+  outline-show: "&e杀手轮廓已显示，持续 {duration} 秒"
+  outline-hide: "&e杀手轮廓已隐藏"
+  # 玩家加入消息
+  player-join: "&e{player} 加入了游戏 ({current}/{max})"
+  # 玩家离开消息
+  player-leave: "&e{player} 离开了游戏"
+  # 玩家死亡消息
+  player-death: "&c{player} 已被{killer} 击杀"

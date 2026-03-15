@@ -1,0 +1,35 @@
+name: TheHunt
+version: '1.0.0'
+main: io.Sriptirc_wp_1242.thehunt.Thehunt
+api-version: '1.16'
+authors: ['wp:1242']
+description: '非对称对抗游戏插件 - 杀手 vs 求生者'
+commands:
+    hunt:
+        description: '主命令 - 加入/离开游戏'
+        aliases: ['th']
+    huntadmin:
+        description: '管理员命令 - 管理游戏设置'
+        aliases: ['tha']
+permissions:
+    thehunt.use:
+        description: '使用插件基础功能'
+        default: false
+    thehunt.admin:
+        description: '管理员权限'
+        default: false
+    thehunt.join:
+        description: '加入游戏'
+        default: false
+    thehunt.leave:
+        description: '离开游戏'
+        default: false
+    thehunt.start:
+        description: '开始游戏'
+        default: false
+    thehunt.stop:
+        description: '停止游戏'
+        default: false
+    thehunt.setup:
+        description: '设置游戏区域'
+        default: false
