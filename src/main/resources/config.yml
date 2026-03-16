@@ -1,134 +1,32 @@
-# The Hunt 插件配置文件
-# ScriptIrc-config-version: 1
+# StupidCheck 插件配置文件
+# 配置版本，每次修改配置结构时请更新此值
+ScriptIrc-config-version: 1
 
-# 游戏大厅配置
-lobby:
-  # 大厅区域（由管理员设置）
-  region: null
-  # 大厅出生点（由管理员设置）
-  spawn: null
-  # 大厅等待时间（秒）
-  wait-time: 60
-  # 最小玩家数
-  min-players: 2
-  # 最大玩家数（全局限制）
-  max-players: 16
+# 玩家必须发送的消息内容
+required-message: "我是傻逼"
 
-# 游戏全局配置
-game:
-  # 求生者获胜条件：生存时间（秒）
-  survivor-win-time: 300
-  # 准备阶段时间（秒）
-  preparation-time: 60
-  # 猎杀阶段配置
-  hunting:
-    # 资源刷新间隔（秒）
-    supply-spawn-interval: 60
-    # 轮廓显示间隔（秒）
-    outline-interval: 60
-    # 轮廓显示持续时间（秒）
-    outline-duration: 10
-    # 轮廓显示目标（true=显示，false=不显示）
-    outline-survivors: true
-    outline-killers: true
-    # 轮廓显示开关
-    outline-enabled: true
-  
-  # 玩家生命数
-  lives: 1
-  # 禁止饥饿
-  disable-hunger: true
-  # 禁止自然回血
-  disable-natural-regeneration: true
-  # 禁止破坏方块
-  disable-block-break: true
-  # 禁止放置方块
-  disable-block-place: true
-  # 禁止同阵营PVP
-  disable-friendly-fire: true
+# 时间限制（秒）
+time-limit-seconds: 10
 
-# 计分系统
-scoring:
-  # 求生者每生存60秒获得分数
-  survivor-per-minute: 1
-  # 杀手每击杀一名求生者获得分数
-  killer-per-kill: 5
+# 是否广播玩家被杀死的信息
+broadcast-death: true
 
-# 奖励系统
-rewards:
-  # 金钱奖励：得分 * 金钱倍数
-  money-multiplier: 100
-  # 自定义道具奖励
-  item-rewards:
-    tier1:
-      score: 50
-      items:
-        - "DIAMOND:10"
-    tier2:
-      score: 30
-      items:
-        - "GOLD_INGOT:10"
-    tier3:
-      score: 10
-      items:
-        - "IRON_INGOT:10"
-    tier4:
-      score: 5
-      items:
-        - "COAL:10"
-    tier5:
-      score: 1
-      items:
-        - "APPLE:1"
+# 广播消息（支持颜色代码 &）
+# 可用变量：{player} - 玩家名
+broadcast-message: "&c玩家 &6{player} &c因为10秒内没有发送'我是傻逼'而被处决了！"
 
-# 默认职业配置
-default-classes:
-  killer:
-    name: "猎杀者"
-    max-health: 20.0
-    potion-effects:
-      - "NIGHT_VISION:999999:0:true"
-    items:
-      - "slot:0,WITHER_SKELETON_SKULL:1"
-      - "slot:38,NETHERITE_CHESTPLATE:1"
-      - "slot:37,NETHERITE_LEGGINGS:1"
-      - "slot:36,NETHERITE_BOOTS:1"
-      - "slot:1,NETHERITE_AXE:1"
-  
-  survivor:
-    name: "逃生者"
-    max-health: 20.0
-    potion-effects: []
-    items:
-      - "slot:38,LEATHER_CHESTPLATE:1"
-      - "slot:36,LEATHER_BOOTS:1"
-      - "slot:0,TORCH:64"
+# 玩家死亡时看到的个人消息
+death-message: "&c你因为10秒内没有发送'我是傻逼'而被处决了！"
 
-# 杀手人数动态调整配置
-killer-adjustment:
-  enabled: false
-  rules:
-    - "survivors:0-4,killers:1"
-    - "survivors:4-8,killers:2"
-    - "survivors:8-12,killers:3"
-    - "survivors:12-16,killers:4"
+# 玩家成功发送消息后看到的提示
+success-message: "&a验证通过！你可以继续游戏了。"
 
-# 指令白名单（游戏内允许使用的指令）
-command-whitelist:
-  - "/msg"
-  - "/tell"
-  - "/whisper"
-  - "/me"
-  - "/hunt"
+# 倒计时警告消息（每5秒或最后5秒每秒显示）
+# 可用变量：{time} - 剩余秒数, {player} - 玩家名
+warning-message: "&e你还有 &6{time} &e秒时间发送'我是傻逼'！"
 
-# 数据存储
-storage:
-  # 游戏数据存储路径
-  games-path: "plugins/TheHunt/games"
-  # 是否自动保存
-  auto-save: true
-  # 自动保存间隔（秒）
-  auto-save-interval: 300
+# 玩家已经通过验证后再次发送消息的提示
+already-passed-message: "&a你已经通过验证了，无需重复发送。"
 
-# 调试模式
-debug: false
+# 豁免权限节点（拥有此权限的玩家不受检查）
+exempt-permission: "stupidcheck.bypass"

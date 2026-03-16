@@ -1,99 +1,20 @@
-name: TheHunt
+name: StupidCheck
 version: '1.0.0'
-main: io.Sriptirc_wp_1242.thehunt.Thehunt
+main: io.Sriptirc_wp_1242.stupidcheck.Stupidcheck
 api-version: '1.16'
 authors: ['wp:1242']
-description: '非对称对抗游戏插件 - 杀手与求生者的猎杀游戏'
-depend: ['Vault']
+description: '玩家必须在限定时间内发送特定消息，否则会被杀死'
 commands:
-    join:
-        description: '加入游戏'
-        aliases: ['j']
-    leave:
-        description: '退出游戏'
-        aliases: ['l']
-    spectate:
-        description: '观战游戏'
-        aliases: ['spec']
-    class:
-        description: '选择职业'
-        aliases: ['c']
-    reload:
-        description: '重载插件'
-        aliases: ['r']
-    editlobby:
-        description: '编辑大厅区域'
-        aliases: ['el']
-    setlobby:
-        description: '设置大厅'
-        aliases: ['sl']
-    create:
-        description: '创建游戏'
-        aliases: ['c']
-    editarena:
-        description: '编辑游戏场地'
-        aliases: ['ea']
-    setarena:
-        description: '设置游戏场地'
-        aliases: ['sa']
-    sethumanspawn:
-        description: '设置求生者出生点'
-        aliases: ['shs']
-    setkillerspawn:
-        description: '设置杀手出生点'
-        aliases: ['sks']
-    setkillerwaiting:
-        description: '设置杀手等待点'
-        aliases: ['skw']
-    setsupply:
-        description: '设置资源点'
-        aliases: ['ss']
-    humanclass:
-        description: '管理求生者职业'
-        aliases: ['hc']
-    killerclass:
-        description: '管理杀手职业'
-        aliases: ['kc']
-    supply:
-        description: '管理资源生成'
-        aliases: ['s']
-    start:
-        description: '强制开始游戏'
-        aliases: ['st']
-    stop:
-        description: '强制结束游戏'
-        aliases: ['sp']
-    setsign:
-        description: '设置加入游戏告示牌'
-        aliases: ['ssign']
-    setleavesign:
-        description: '设置离开游戏告示牌'
-        aliases: ['slsign']
+    stupidcheck:
+        description: '查看插件状态和帮助'
+        aliases: ['sc']
 permissions:
-    thehunt.join:
-        description: '加入游戏权限'
+    stupidcheck.bypass:
+        description: '豁免检查权限'
         default: false
-    thehunt.leave:
-        description: '退出游戏权限'
+    stupidcheck.reload:
+        description: '重载插件配置权限'
         default: false
-    thehunt.spectate:
-        description: '观战游戏权限'
-        default: false
-    thehunt.class:
-        description: '选择职业权限'
-        default: false
-    thehunt.admin:
+    stupidcheck.admin:
         description: '管理员权限'
-        default: false
-    thehunt.reload:
-        description: '重载插件权限'
-        default: false
-    thehunt.create:
-        description: '创建游戏权限'
-        default: false
-    thehunt.edit:
-        description: '编辑游戏配置权限'
-        default: false
-    thehunt.force:
-        description: '强制操作权限'
         default: false
