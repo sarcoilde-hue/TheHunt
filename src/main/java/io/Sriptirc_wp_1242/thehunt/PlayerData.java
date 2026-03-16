@@ -1,139 +1,319 @@
 package io.Sriptirc_wp_1242.thehunt;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
-import java.util.Collection;
-import java.util.UUID;
+import java.util.*;
 
+/**
+ * 玩家数据管理
+ */
 public class PlayerData {
     
-    private final UUID playerId;
-    private PlayerRole role = PlayerRole.NONE;
-    private boolean isAlive = true;
-    private int kills = 0;
-    private int assists = 0;
-    private int damageDealt = 0;
-    private int survivalTime = 0;
+    private static final Map<UUID, Location> savedLocations = new HashMap<>();
+    private static final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
+    private static final Map<UUID, ItemStack[]> savedArmor = new HashMap<>();
+    private static final Map<UUID, Collection<PotionEffect>> savedEffects = new HashMap<>();
+    private static final Map<UUID, Integer> savedFoodLevel = new HashMap<>();
+    private static final Map<UUID, Double> savedHealth = new HashMap<>();
+    private static final Map<UUID, Integer> savedExp = new HashMap<>();
+    private static final Map<UUID, Float> savedExpToLevel = new HashMap<>();
     
-    // 保存玩家原始状态
-    private ItemStack[] originalInventory;
-    private ItemStack[] originalArmor;
-    private Collection<PotionEffect> originalEffects;
-    private double originalHealth;
-    private int originalFoodLevel;
-    private float originalSaturation;
-    private String originalDisplayName;
-    private boolean originalAllowFlight;
-    private boolean originalFlying;
-    private GameMode originalGameMode;
-    
-    public PlayerData(UUID playerId) {
-        this.playerId = playerId;
+    /**
+     * 保存玩家状态
+     */
+    public static void saveState(Player player) {
+        UUID uuid = player.getUniqueId();
+        
+        // 保存位置
+        savedLocations.put(uuid, player.getLocation());
+        
+        // 保存物品栏
+        PlayerInventory inventory = player.getInventory();
+        savedInventories.put(uuid, inventory.getContents().clone());
+        savedArmor.put(uuid, inventory.getArmorContents().clone());
+        
+        // 保存药水效果
+        savedEffects.put(uuid, new ArrayList<>(player.getActivePotionEffects()));
+        
+        // 保存其他状态
+        savedFoodLevel.put(uuid, player.getFoodLevel());
+        savedHealth.put(uuid, player.getHealth());
+        savedExp.put(uuid, player.getTotalExperience());
+        savedExpToLevel.put(uuid, player.getExp());
+        
+        // 清除玩家状态
+        clearPlayerState(player);
     }
     
-    public void saveOriginalState(Player player) {
-        this.originalInventory = player.getInventory().getContents();
-        this.originalArmor = player.getInventory().getArmorContents();
-        this.originalEffects = player.getActivePotionEffects();
-        this.originalHealth = player.getHealth();
-        this.originalFoodLevel = player.getFoodLevel();
-        this.originalSaturation = player.getSaturation();
-        this.originalDisplayName = player.getDisplayName();
-        this.originalAllowFlight = player.getAllowFlight();
-        this.originalFlying = player.isFlying();
-        this.originalGameMode = player.getGameMode();
+    /**
+     * 恢复玩家状态
+     */
+    public static void restoreState(Player player) {
+        UUID uuid = player.getUniqueId();
+        
+        // 恢复位置
+        if (savedLocations.containsKey(uuid)) {
+            player.teleport(savedLocations.get(uuid));
+            savedLocations.remove(uuid);
+        }
+        
+        // 恢复物品栏
+        if (savedInventories.containsKey(uuid)) {
+            player.getInventory().setContents(savedInventories.get(uuid));
+            savedInventories.remove(uuid);
+        }
+        
+        if (savedArmor.containsKey(uuid)) {
+            player.getInventory().setArmorContents(savedArmor.get(uuid));
+            savedArmor.remove(uuid);
+        }
+        
+        // 清除当前效果
+        player.getActivePotionEffects().forEach(effect -> 
+            player.removePotionEffect(effect.getType()));
+        
+        // 恢复药水效果
+        if (savedEffects.containsKey(uuid)) {
+            for (PotionEffect effect : savedEffects.get(uuid)) {
+                player.addPotionEffect(effect);
+            }
+            savedEffects.remove(uuid);
+        }
+        
+        // 恢复其他状态
+        if (savedFoodLevel.containsKey(uuid)) {
+            player.setFoodLevel(savedFoodLevel.get(uuid));
+            savedFoodLevel.remove(uuid);
+        }
+        
+        if (savedHealth.containsKey(uuid)) {
+            player.setHealth(savedHealth.get(uuid));
+            savedHealth.remove(uuid);
+        }
+        
+        if (savedExp.containsKey(uuid)) {
+            player.setTotalExperience(savedExp.get(uuid));
+            savedExp.remove(uuid);
+        }
+        
+        if (savedExpToLevel.containsKey(uuid)) {
+            player.setExp(savedExpToLevel.get(uuid));
+            savedExpToLevel.remove(uuid);
+        }
+        
+        // 恢复游戏模式
+        player.setGameMode(org.bukkit.GameMode.SURVIVAL);
     }
     
-    public void restoreOriginalState(Player player) {
-        if (originalInventory != null) {
-            player.getInventory().setContents(originalInventory);
+    /**
+     * 仅保存位置（用于加入游戏时）
+     */
+    public static void saveLocation(Player player) {
+        savedLocations.put(player.getUniqueId(), player.getLocation());
+    }
+    
+    /**
+     * 仅恢复位置（用于离开游戏时）
+     */
+    public static void restoreLocation(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (savedLocations.containsKey(uuid)) {
+            player.teleport(savedLocations.get(uuid));
+            savedLocations.remove(uuid);
         }
-        if (originalArmor != null) {
-            player.getInventory().setArmorContents(originalArmor);
-        }
+    }
+    
+    /**
+     * 清除玩家状态（用于进入游戏时）
+     */
+    private static void clearPlayerState(Player player) {
+        // 清空物品栏
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[4]);
         
         // 清除所有药水效果
-        for (PotionEffect effect : player.getActivePotionEffects()) {
-            player.removePotionEffect(effect.getType());
-        }
+        player.getActivePotionEffects().forEach(effect -> 
+            player.removePotionEffect(effect.getType()));
         
-        // 恢复原始药水效果
-        if (originalEffects != null) {
-            for (PotionEffect effect : originalEffects) {
-                player.addPotionEffect(effect);
+        // 重置状态
+        player.setHealth(20.0);
+        player.setFoodLevel(20);
+        player.setSaturation(20);
+        player.setExhaustion(0);
+        player.setFireTicks(0);
+        player.setTotalExperience(0);
+        player.setExp(0);
+        player.setLevel(0);
+        
+        // 设置游戏模式
+        player.setGameMode(org.bukkit.GameMode.SURVIVAL);
+    }
+    
+    /**
+     * 保存玩家物品栏到配置（用于保存职业）
+     */
+    public static Map<String, Object> saveInventoryToConfig(Player player) {
+        Map<String, Object> config = new HashMap<>();
+        PlayerInventory inventory = player.getInventory();
+        
+        // 保存主手物品栏
+        ItemStack[] contents = inventory.getContents();
+        List<Map<String, Object>> items = new ArrayList<>();
+        
+        for (int i = 0; i < contents.length; i++) {
+            ItemStack item = contents[i];
+            if (item != null) {
+                Map<String, Object> itemData = new HashMap<>();
+                itemData.put("slot", i);
+                itemData.put("item", item.serialize());
+                items.add(itemData);
             }
         }
         
-        player.setHealth(Math.min(originalHealth, player.getMaxHealth()));
-        player.setFoodLevel(originalFoodLevel);
-        player.setSaturation(originalSaturation);
-        player.setDisplayName(originalDisplayName);
-        player.setAllowFlight(originalAllowFlight);
-        player.setFlying(originalFlying);
-        player.setGameMode(originalGameMode);
+        config.put("inventory", items);
         
-        // 重置玩家状态
-        player.setFireTicks(0);
-        player.setFallDistance(0);
-        player.setGlowing(false);
-    }
-    
-    public void applyGameSettings(Player player, PlayerRole role) {
-        // 清空背包
-        player.getInventory().clear();
-        player.getInventory().setArmorContents(null);
+        // 保存盔甲
+        ItemStack[] armor = inventory.getArmorContents();
+        List<Map<String, Object>> armorItems = new ArrayList<>();
         
-        // 清除所有药水效果
+        String[] armorSlots = {"helmet", "chestplate", "leggings", "boots"};
+        for (int i = 0; i < armor.length; i++) {
+            ItemStack item = armor[i];
+            if (item != null) {
+                Map<String, Object> itemData = new HashMap<>();
+                itemData.put("slot", armorSlots[i]);
+                itemData.put("item", item.serialize());
+                armorItems.add(itemData);
+            }
+        }
+        
+        config.put("armor", armorItems);
+        
+        // 保存药水效果
+        List<Map<String, Object>> effects = new ArrayList<>();
         for (PotionEffect effect : player.getActivePotionEffects()) {
-            player.removePotionEffect(effect.getType());
+            Map<String, Object> effectData = new HashMap<>();
+            effectData.put("type", effect.getType().getName());
+            effectData.put("duration", effect.getDuration());
+            effectData.put("amplifier", effect.getAmplifier());
+            effectData.put("ambient", effect.isAmbient());
+            effectData.put("particles", effect.hasParticles());
+            effectData.put("icon", effect.hasIcon());
+            effects.add(effectData);
         }
         
-        // 根据角色应用设置
-        if (role == PlayerRole.KILLER) {
-            // 杀手设置
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, Integer.MAX_VALUE, 0));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, Integer.MAX_VALUE, 0));
-            player.setHealth(40.0); // 杀手有更多生命值
-        } else if (role == PlayerRole.SURVIVOR) {
-            // 求生者设置
-            player.setHealth(20.0);
-        }
+        config.put("effects", effects);
         
-        // 通用设置
-        player.setFoodLevel(20);
-        player.setSaturation(20);
-        player.setAllowFlight(false);
-        player.setFlying(false);
-        player.setGameMode(GameMode.SURVIVAL);
+        // 保存其他属性
+        config.put("max-health", player.getMaxHealth());
+        config.put("health", player.getHealth());
+        config.put("food-level", player.getFoodLevel());
         
-        // 禁止饥饿和自然回血
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SATURATION, Integer.MAX_VALUE, 0, false, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, Integer.MAX_VALUE, 0, false, false));
+        return config;
     }
     
-    // Getter 和 Setter 方法
-    public UUID getPlayerId() { return playerId; }
-    public PlayerRole getRole() { return role; }
-    public void setRole(PlayerRole role) { this.role = role; }
-    public boolean isAlive() { return isAlive; }
-    public void setAlive(boolean alive) { isAlive = alive; }
-    public int getKills() { return kills; }
-    public void addKill() { kills++; }
-    public int getAssists() { return assists; }
-    public void addAssist() { assists++; }
-    public int getDamageDealt() { return damageDealt; }
-    public void addDamageDealt(int damage) { damageDealt += damage; }
-    public int getSurvivalTime() { return survivalTime; }
-    public void addSurvivalTime(int seconds) { survivalTime += seconds; }
+    /**
+     * 从配置加载物品栏到玩家（用于应用职业）
+     */
+    public static void loadInventoryFromConfig(Player player, Map<String, Object> config) {
+        if (config == null) return;
+        
+        // 清空当前物品栏
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[4]);
+        
+        // 加载主手物品栏
+        if (config.containsKey("inventory")) {
+            List<Map<String, Object>> items = (List<Map<String, Object>>) config.get("inventory");
+            for (Map<String, Object> itemData : items) {
+                int slot = (int) itemData.get("slot");
+                Map<String, Object> itemMap = (Map<String, Object>) itemData.get("item");
+                ItemStack item = ItemStack.deserialize(itemMap);
+                player.getInventory().setItem(slot, item);
+            }
+        }
+        
+        // 加载盔甲
+        if (config.containsKey("armor")) {
+            List<Map<String, Object>> armorItems = (List<Map<String, Object>>) config.get("armor");
+            ItemStack[] armor = new ItemStack[4];
+            
+            for (Map<String, Object> itemData : armorItems) {
+                String slot = (String) itemData.get("slot");
+                Map<String, Object> itemMap = (Map<String, Object>) itemData.get("item");
+                ItemStack item = ItemStack.deserialize(itemMap);
+                
+                switch (slot) {
+                    case "helmet":
+                        armor[3] = item;
+                        break;
+                    case "chestplate":
+                        armor[2] = item;
+                        break;
+                    case "leggings":
+                        armor[1] = item;
+                        break;
+                    case "boots":
+                        armor[0] = item;
+                        break;
+                }
+            }
+            
+            player.getInventory().setArmorContents(armor);
+        }
+        
+        // 清除当前效果
+        player.getActivePotionEffects().forEach(effect -> 
+            player.removePotionEffect(effect.getType()));
+        
+        // 加载药水效果
+        if (config.containsKey("effects")) {
+            List<Map<String, Object>> effects = (List<Map<String, Object>>) config.get("effects");
+            for (Map<String, Object> effectData : effects) {
+                // TODO: 需要将字符串转换为PotionEffectType
+                // 这里简化处理，实际需要完整实现
+            }
+        }
+        
+        // 加载其他属性
+        if (config.containsKey("max-health")) {
+            player.setMaxHealth(((Number) config.get("max-health")).doubleValue());
+        }
+        
+        if (config.containsKey("health")) {
+            player.setHealth(((Number) config.get("health")).doubleValue());
+        }
+        
+        if (config.containsKey("food-level")) {
+            player.setFoodLevel((int) config.get("food-level"));
+        }
+    }
     
-    // 枚举 GameMode 的兼容性处理
-    public enum GameMode {
-        SURVIVAL,
-        CREATIVE,
-        ADVENTURE,
-        SPECTATOR
+    /**
+     * 检查玩家是否有保存的状态
+     */
+    public static boolean hasSavedState(UUID uuid) {
+        return savedLocations.containsKey(uuid) || 
+               savedInventories.containsKey(uuid) ||
+               savedArmor.containsKey(uuid);
+    }
+    
+    /**
+     * 清理玩家数据（插件禁用时）
+     */
+    public static void cleanup() {
+        savedLocations.clear();
+        savedInventories.clear();
+        savedArmor.clear();
+        savedEffects.clear();
+        savedFoodLevel.clear();
+        savedHealth.clear();
+        savedExp.clear();
+        savedExpToLevel.clear();
     }
 }

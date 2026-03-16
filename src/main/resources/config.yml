@@ -1,112 +1,134 @@
 # The Hunt 插件配置文件
-# ScriptIrc 配置版本 - 每次修改配置结构时递增此值
-ScriptIrc-config-version: 1
+# ScriptIrc-config-version: 1
 
-# 游戏设置
-game:
-  # 游戏时间（秒）
-  time: 600
+# 游戏大厅配置
+lobby:
+  # 大厅区域（由管理员设置）
+  region: null
+  # 大厅出生点（由管理员设置）
+  spawn: null
   # 大厅等待时间（秒）
-  lobby-wait-time: 30
-
-# 轮廓显示设置
-outline:
-  # 轮廓显示间隔（秒）
-  interval: 120
-  # 轮廓显示持续时间（秒）
-  duration: 10
-
-# 玩家设置
-players:
+  wait-time: 60
   # 最小玩家数
-  min: 4
-  # 最大玩家数
-  max: 10
-  # 超过此人数时使用2名杀手
-  killer-threshold: 8
+  min-players: 2
+  # 最大玩家数（全局限制）
+  max-players: 16
 
-# 世界设置
-worlds:
-  # 大厅世界
-  lobby: world
-  # 游戏世界
-  game: world
+# 游戏全局配置
+game:
+  # 求生者获胜条件：生存时间（秒）
+  survivor-win-time: 300
+  # 准备阶段时间（秒）
+  preparation-time: 60
+  # 猎杀阶段配置
+  hunting:
+    # 资源刷新间隔（秒）
+    supply-spawn-interval: 60
+    # 轮廓显示间隔（秒）
+    outline-interval: 60
+    # 轮廓显示持续时间（秒）
+    outline-duration: 10
+    # 轮廓显示目标（true=显示，false=不显示）
+    outline-survivors: true
+    outline-killers: true
+    # 轮廓显示开关
+    outline-enabled: true
+  
+  # 玩家生命数
+  lives: 1
+  # 禁止饥饿
+  disable-hunger: true
+  # 禁止自然回血
+  disable-natural-regeneration: true
+  # 禁止破坏方块
+  disable-block-break: true
+  # 禁止放置方块
+  disable-block-place: true
+  # 禁止同阵营PVP
+  disable-friendly-fire: true
 
-# 出生点设置
-spawns:
-  # 杀手出生点（格式：世界名,x,y,z,yaw,pitch）
+# 计分系统
+scoring:
+  # 求生者每生存60秒获得分数
+  survivor-per-minute: 1
+  # 杀手每击杀一名求生者获得分数
+  killer-per-kill: 5
+
+# 奖励系统
+rewards:
+  # 金钱奖励：得分 * 金钱倍数
+  money-multiplier: 100
+  # 自定义道具奖励
+  item-rewards:
+    tier1:
+      score: 50
+      items:
+        - "DIAMOND:10"
+    tier2:
+      score: 30
+      items:
+        - "GOLD_INGOT:10"
+    tier3:
+      score: 10
+      items:
+        - "IRON_INGOT:10"
+    tier4:
+      score: 5
+      items:
+        - "COAL:10"
+    tier5:
+      score: 1
+      items:
+        - "APPLE:1"
+
+# 默认职业配置
+default-classes:
   killer:
-    - "world,10,64,10,180,0"
-    - "world,-10,64,10,180,0"
+    name: "猎杀者"
+    max-health: 20.0
+    potion-effects:
+      - "NIGHT_VISION:999999:0:true"
+    items:
+      - "slot:0,WITHER_SKELETON_SKULL:1"
+      - "slot:38,NETHERITE_CHESTPLATE:1"
+      - "slot:37,NETHERITE_LEGGINGS:1"
+      - "slot:36,NETHERITE_BOOTS:1"
+      - "slot:1,NETHERITE_AXE:1"
   
-  # 求生者出生点
   survivor:
-    - "world,20,64,20,0,0"
-    - "world,-20,64,20,0,0"
-    - "world,20,64,-20,0,0"
-    - "world,-20,64,-20,0,0"
-  
-  # 资源点
-  resource:
-    - "world,30,64,30"
-    - "world,-30,64,30"
-    - "world,30,64,-30"
-    - "world,-30,64,-30"
+    name: "逃生者"
+    max-health: 20.0
+    potion-effects: []
+    items:
+      - "slot:38,LEATHER_CHESTPLATE:1"
+      - "slot:36,LEATHER_BOOTS:1"
+      - "slot:0,TORCH:64"
 
-# 自定义物品（待扩展）
-items:
-  # 示例：杀手之刃
-  killer_sword:
-    material: IRON_SWORD
-    display-name: "&c杀手之刃"
-    lore:
-      - "&7杀手专用武器"
-      - "&6+10% 移动速度"
-      - "&6+20% 攻击伤害"
-    attributes:
-      generic.movement_speed: 0.10
-      generic.attack_damage: 0.20
-    enchantments:
-      DAMAGE_ALL: 2
-  
-  # 示例：速度药水
-  speed_potion:
-    material: POTION
-    display-name: "&b速度药水"
-    lore:
-      - "&7使用后获得速度效果"
-      - "&6持续时间: 30秒"
-    potion-type: SPEED
-    extended: false
-    upgraded: false
+# 杀手人数动态调整配置
+killer-adjustment:
+  enabled: false
+  rules:
+    - "survivors:0-4,killers:1"
+    - "survivors:4-8,killers:2"
+    - "survivors:8-12,killers:3"
+    - "survivors:12-16,killers:4"
 
-# 音效设置
-sounds:
-  # 游戏开始音效
-  game-start: ENTITY_ENDER_DRAGON_GROWL
-  # 游戏结束音效（求生者获胜）
-  game-end-survivors: UI_TOAST_CHALLENGE_COMPLETE
-  # 游戏结束音效（杀手获胜）
-  game-end-killers: ENTITY_WITHER_DEATH
-  # 倒计时音效
-  countdown: BLOCK_NOTE_BLOCK_PLING
-  # 轮廓显示音效
-  outline: BLOCK_BELL_USE
+# 指令白名单（游戏内允许使用的指令）
+command-whitelist:
+  - "/msg"
+  - "/tell"
+  - "/whisper"
+  - "/me"
+  - "/hunt"
 
-# 消息设置
-messages:
-  # 游戏开始消息
-  game-start: "&c=== 游戏开始！ ==="
-  # 游戏结束消息（求生者获胜）
-  game-end-survivors: "&a=== 游戏结束！求生者获胜！ ==="
-  # 游戏结束消息（杀手获胜）
-  game-end-killers: "&c=== 游戏结束！杀手获胜！ ==="
-  # 轮廓显示消息
-  outline-show: "&e杀手轮廓已显示，持续 {duration} 秒"
-  outline-hide: "&e杀手轮廓已隐藏"
-  # 玩家加入消息
-  player-join: "&e{player} 加入了游戏 ({current}/{max})"
-  # 玩家离开消息
-  player-leave: "&e{player} 离开了游戏"
-  # 玩家死亡消息
-  player-death: "&c{player} 已被{killer} 击杀"
+# 数据存储
+storage:
+  # 游戏数据存储路径
+  games-path: "plugins/TheHunt/games"
+  # 是否自动保存
+  auto-save: true
+  # 自动保存间隔（秒）
+  auto-save-interval: 300
+
+# 调试模式
+debug: false

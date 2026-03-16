@@ -1,0 +1,63 @@
+# ScriptIrc 项目配置文件
+# The Hunt - 非对称对抗游戏插件
+
+name: TheHunt
+version: 1.0.0
+description: 非对称对抗游戏插件 - 杀手与求生者的猎杀游戏
+author: Sriptirc_wp_1242
+game_version: 1.21.x
+min_api_version: 1.16.5
+
+# 依赖插件
+dependencies:
+  - Vault
+
+# 命令列表
+commands:
+  - join: 加入游戏
+  - leave: 退出游戏
+  - spectate: 观战游戏
+  - class: 选择职业
+  - reload: 重载插件
+  - editlobby: 编辑大厅区域
+  - setlobby: 设置大厅
+  - create: 创建游戏
+  - editarena: 编辑游戏场地
+  - setarena: 设置游戏场地
+  - sethumanspawn: 设置求生者出生点
+  - setkillerspawn: 设置杀手出生点
+  - setkillerwaiting: 设置杀手等待点
+  - setsupply: 设置资源点
+  - humanclass: 管理求生者职业
+  - killerclass: 管理杀手职业
+  - supply: 管理资源生成
+  - start: 强制开始游戏
+  - stop: 强制结束游戏
+  - setsign: 设置加入游戏告示牌
+  - setleavesign: 设置离开游戏告示牌
+
+# 权限节点
+permissions:
+  - thehunt.join: 加入游戏权限
+  - thehunt.leave: 退出游戏权限
+  - thehunt.spectate: 观战游戏权限
+  - thehunt.class: 选择职业权限
+  - thehunt.admin: 管理员权限
+  - thehunt.reload: 重载插件权限
+  - thehunt.create: 创建游戏权限
+  - thehunt.edit: 编辑游戏配置权限
+  - thehunt.force: 强制操作权限
+
+# 项目结构
+structure:
+  main_class: io.Sriptirc_wp_1242.thehunt.Thehunt
+  config_files:
+    - config.yml
+  data_dirs:
+    - games/
+
+# 编译信息
+build:
+  java_version: 17
+  encoding: UTF-8
+  output: TheHunt-1.0.0.jar

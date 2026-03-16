@@ -1,595 +1,467 @@
 package io.Sriptirc_wp_1242.thehunt;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.Sound;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.logging.Level;
 
+/**
+ * 游戏管理器 - 管理所有游戏实例
+ */
 public class GameManager {
     
-    private final Thehunt plugin;
-    private final ConfigManager configManager;
-    private final PlayerManager playerManager;
-    private final MapManager mapManager;
-    private final ItemManager itemManager;
+    private final JavaPlugin plugin;
+    private final Map<String, Game> games = new HashMap<>();
+    private final Map<UUID, String> playerGames = new HashMap<>(); // 玩家UUID -> 游戏名
+    private final Map<UUID, String> spectatorGames = new HashMap<>(); // 观战者UUID -> 游戏名
     
-    private GameState gameState = GameState.DISABLED;
-    private int gameTimeLeft = 0;
-    private int outlineTimer = 0;
-    private boolean outlineActive = false;
+    // 大厅相关
+    private Region lobbyRegion;
+    private Location lobbySpawn;
     
-    private BukkitTask gameTimerTask;
-    private BukkitTask outlineTask;
-    private BukkitTask countdownTask;
-    
-    private final List<UUID> playersInGame = new ArrayList<>();
-    private final List<UUID> killers = new ArrayList<>();
-    private final List<UUID> survivors = new ArrayList<>();
-    private final List<UUID> spectators = new ArrayList<>();
-    
-    public GameManager(Thehunt plugin, ConfigManager configManager, 
-                      PlayerManager playerManager, MapManager mapManager, ItemManager itemManager) {
+    public GameManager(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.configManager = configManager;
-        this.playerManager = playerManager;
-        this.mapManager = mapManager;
-        this.itemManager = itemManager;
     }
     
-    public void startLobby() {
-        if (gameState != GameState.DISABLED) {
+    /**
+     * 加载所有游戏
+     */
+    public void loadGames() {
+        File gamesFolder = new File(plugin.getDataFolder(), "games");
+        if (!gamesFolder.exists()) {
+            gamesFolder.mkdirs();
             return;
         }
         
-        gameState = GameState.LOBBY_WAITING;
-        broadcastMessage(ChatColor.GREEN + "=== The Hunt 游戏大厅已开启 ===");
-        broadcastMessage(ChatColor.YELLOW + "输入 /hunt join 加入游戏");
-        broadcastMessage(ChatColor.YELLOW + "需要至少 " + configManager.getMinPlayers() + " 名玩家才能开始");
+        File[] gameFolders = gamesFolder.listFiles(File::isDirectory);
+        if (gameFolders == null) return;
+        
+        for (File gameFolder : gameFolders) {
+            String gameName = gameFolder.getName();
+            try {
+                Game game = loadGame(gameName);
+                if (game != null) {
+                    games.put(gameName, game);
+                    plugin.getLogger().info("已加载游戏: " + gameName);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "加载游戏失败: " + gameName, e);
+            }
+        }
     }
     
-    public void joinLobby(Player player) {
-        if (gameState != GameState.LOBBY_WAITING && gameState != GameState.LOBBY_COUNTDOWN) {
-            player.sendMessage(ChatColor.RED + "游戏未在等待阶段，无法加入");
-            return;
+    /**
+     * 保存所有游戏
+     */
+    public void saveGames() {
+        for (Game game : games.values()) {
+            saveGame(game);
+        }
+    }
+    
+    /**
+     * 加载单个游戏
+     */
+    private Game loadGame(String gameName) {
+        File gameFolder = new File(plugin.getDataFolder(), "games/" + gameName);
+        if (!gameFolder.exists()) return null;
+        
+        File configFile = new File(gameFolder, "config.yml");
+        File classesFile = new File(gameFolder, "classes.yml");
+        File suppliesFile = new File(gameFolder, "supplies.yml");
+        
+        if (!configFile.exists()) return null;
+        
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
+            YamlConfiguration classes = classesFile.exists() ? 
+                YamlConfiguration.loadConfiguration(classesFile) : new YamlConfiguration();
+            YamlConfiguration supplies = suppliesFile.exists() ? 
+                YamlConfiguration.loadConfiguration(suppliesFile) : new YamlConfiguration();
+            
+            return new Game(gameName, config, classes, supplies);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "加载游戏配置失败: " + gameName, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 保存单个游戏
+     */
+    private void saveGame(Game game) {
+        File gameFolder = new File(plugin.getDataFolder(), "games/" + game.getName());
+        if (!gameFolder.exists()) {
+            gameFolder.mkdirs();
         }
         
-        if (playersInGame.contains(player.getUniqueId())) {
-            player.sendMessage(ChatColor.RED + "你已经加入了游戏");
-            return;
+        try {
+            game.getConfig().save(new File(gameFolder, "config.yml"));
+            game.getClassesConfig().save(new File(gameFolder, "classes.yml"));
+            game.getSuppliesConfig().save(new File(gameFolder, "supplies.yml"));
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.WARNING, "保存游戏失败: " + game.getName(), e);
+        }
+    }
+    
+    /**
+     * 创建新游戏
+     */
+    public boolean createGame(String name, int killerCount, int survivorCount, int maxPlayers) {
+        if (games.containsKey(name)) {
+            return false;
         }
         
-        if (playersInGame.size() >= configManager.getMaxPlayers()) {
-            player.sendMessage(ChatColor.RED + "游戏已满员，无法加入");
-            return;
+        if (maxPlayers < 2) {
+            return false;
         }
         
-        // 保存玩家原始状态
-        playerManager.getPlayerData(player.getUniqueId()).saveOriginalState(player);
+        if (killerCount >= survivorCount) {
+            return false;
+        }
+        
+        // 创建游戏配置
+        YamlConfiguration config = new YamlConfiguration();
+        config.set("name", name);
+        config.set("killer-count", killerCount);
+        config.set("survivor-count", survivorCount);
+        config.set("max-players", maxPlayers);
+        config.set("enabled", false);
+        config.set("arena", null);
+        config.set("survivor-spawns", new ArrayList<String>());
+        config.set("killer-spawns", new ArrayList<String>());
+        config.set("killer-waiting", null);
+        config.set("supply-points", new ArrayList<String>());
+        
+        Game game = new Game(name, config, new YamlConfiguration(), new YamlConfiguration());
+        games.put(name, game);
+        saveGame(game);
+        
+        return true;
+    }
+    
+    /**
+     * 删除游戏
+     */
+    public boolean deleteGame(String name) {
+        Game game = games.remove(name);
+        if (game == null) return false;
+        
+        // 踢出所有玩家
+        for (UUID playerId : new HashSet<>(playerGames.keySet())) {
+            if (playerGames.get(playerId).equals(name)) {
+                Player player = Bukkit.getPlayer(playerId);
+                if (player != null) {
+                    leaveGame(player);
+                }
+            }
+        }
+        
+        // 删除文件
+        File gameFolder = new File(plugin.getDataFolder(), "games/" + name);
+        if (gameFolder.exists()) {
+            deleteFolder(gameFolder);
+        }
+        
+        return true;
+    }
+    
+    private void deleteFolder(File folder) {
+        if (folder.isDirectory()) {
+            File[] files = folder.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    deleteFolder(file);
+                }
+            }
+        }
+        folder.delete();
+    }
+    
+    /**
+     * 加入游戏
+     */
+    public boolean joinGame(Player player, String gameName) {
+        Game game = games.get(gameName);
+        if (game == null) return false;
+        
+        if (playerGames.containsKey(player.getUniqueId())) {
+            return false; // 已经在其他游戏中
+        }
+        
+        if (!game.canJoin()) {
+            return false;
+        }
+        
+        // 保存玩家位置
+        PlayerData.saveLocation(player);
         
         // 传送到大厅
-        Location lobbySpawn = mapManager.getRandomLobbySpawn();
         if (lobbySpawn != null) {
             player.teleport(lobbySpawn);
         }
         
-        // 设置玩家为大厅状态
-        playerManager.setPlayerRole(player.getUniqueId(), PlayerRole.LOBBY);
-        playersInGame.add(player.getUniqueId());
+        playerGames.put(player.getUniqueId(), gameName);
+        game.addPlayer(player);
         
-        player.sendMessage(ChatColor.GREEN + "你已加入游戏大厅！");
-        broadcastMessage(ChatColor.YELLOW + player.getName() + " 加入了游戏 (" + playersInGame.size() + "/" + configManager.getMaxPlayers() + ")");
-        
-        // 检查是否可以开始倒计时
-        checkStartCountdown();
+        return true;
     }
     
-    public void leaveGame(Player player) {
-        UUID playerId = player.getUniqueId();
+    /**
+     * 离开游戏
+     */
+    public boolean leaveGame(Player player) {
+        String gameName = playerGames.remove(player.getUniqueId());
+        if (gameName == null) return false;
         
-        if (!playersInGame.contains(playerId)) {
-            player.sendMessage(ChatColor.RED + "你不在游戏中");
-            return;
+        Game game = games.get(gameName);
+        if (game != null) {
+            game.removePlayer(player);
         }
         
-        // 恢复玩家原始状态
-        playerManager.getPlayerData(playerId).restoreOriginalState(player);
+        // 恢复玩家位置
+        PlayerData.restoreLocation(player);
         
-        // 从列表中移除
-        playersInGame.remove(playerId);
-        killers.remove(playerId);
-        survivors.remove(playerId);
-        spectators.remove(playerId);
-        
-        playerManager.setPlayerRole(playerId, PlayerRole.NONE);
-        
-        player.sendMessage(ChatColor.YELLOW + "你已离开游戏");
-        broadcastMessage(ChatColor.YELLOW + player.getName() + " 离开了游戏");
-        
-        // 检查游戏是否应该结束
-        checkGameEnd();
+        return true;
     }
     
-    private void checkStartCountdown() {
-        if (gameState == GameState.LOBBY_WAITING && 
-            playersInGame.size() >= configManager.getMinPlayers()) {
-            startCountdown();
+    /**
+     * 观战游戏
+     */
+    public boolean spectateGame(Player player, String gameName) {
+        Game game = games.get(gameName);
+        if (game == null) return false;
+        
+        if (!game.isRunning()) {
+            return false;
+        }
+        
+        spectatorGames.put(player.getUniqueId(), gameName);
+        game.addSpectator(player);
+        
+        return true;
+    }
+    
+    /**
+     * 停止观战
+     */
+    public boolean stopSpectating(Player player) {
+        String gameName = spectatorGames.remove(player.getUniqueId());
+        if (gameName == null) return false;
+        
+        Game game = games.get(gameName);
+        if (game != null) {
+            game.removeSpectator(player);
+        }
+        
+        PlayerData.restoreLocation(player);
+        
+        return true;
+    }
+    
+    /**
+     * 获取玩家所在的游戏
+     */
+    public Game getPlayerGame(Player player) {
+        String gameName = playerGames.get(player.getUniqueId());
+        return gameName != null ? games.get(gameName) : null;
+    }
+    
+    /**
+     * 获取玩家观战的游戏
+     */
+    public Game getSpectatorGame(Player player) {
+        String gameName = spectatorGames.get(player.getUniqueId());
+        return gameName != null ? games.get(gameName) : null;
+    }
+    
+    /**
+     * 获取游戏
+     */
+    public Game getGame(String name) {
+        return games.get(name);
+    }
+    
+    /**
+     * 获取所有游戏
+     */
+    public Collection<Game> getAllGames() {
+        return games.values();
+    }
+    
+    /**
+     * 获取游戏名称列表
+     */
+    public List<String> getGameNames() {
+        return new ArrayList<>(games.keySet());
+    }
+    
+    /**
+     * 设置大厅区域
+     */
+    public void setLobbyRegion(Location pos1, Location pos2) {
+        this.lobbyRegion = new Region(pos1, pos2);
+    }
+    
+    /**
+     * 设置大厅出生点
+     */
+    public void setLobbySpawn(Location location) {
+        this.lobbySpawn = location;
+    }
+    
+    /**
+     * 获取大厅区域
+     */
+    public Region getLobbyRegion() {
+        return lobbyRegion;
+    }
+    
+    /**
+     * 获取大厅出生点
+     */
+    public Location getLobbySpawn() {
+        return lobbySpawn;
+    }
+    
+    /**
+     * 检查位置是否在大厅内
+     */
+    public boolean isInLobby(Location location) {
+        return lobbyRegion != null && lobbyRegion.contains(location);
+    }
+    
+    /**
+     * 保存大厅配置
+     */
+    public void saveLobbyConfig() {
+        FileConfiguration config = plugin.getConfig();
+        
+        if (lobbyRegion != null) {
+            config.set("lobby.region.pos1", locationToString(lobbyRegion.getPos1()));
+            config.set("lobby.region.pos2", locationToString(lobbyRegion.getPos2()));
+        }
+        
+        if (lobbySpawn != null) {
+            config.set("lobby.spawn", locationToString(lobbySpawn));
+        }
+        
+        plugin.saveConfig();
+    }
+    
+    /**
+     * 加载大厅配置
+     */
+    public void loadLobbyConfig() {
+        FileConfiguration config = plugin.getConfig();
+        
+        if (config.contains("lobby.region.pos1") && config.contains("lobby.region.pos2")) {
+            Location pos1 = stringToLocation(config.getString("lobby.region.pos1"));
+            Location pos2 = stringToLocation(config.getString("lobby.region.pos2"));
+            if (pos1 != null && pos2 != null) {
+                lobbyRegion = new Region(pos1, pos2);
+            }
+        }
+        
+        if (config.contains("lobby.spawn")) {
+            lobbySpawn = stringToLocation(config.getString("lobby.spawn"));
         }
     }
     
-    private void startCountdown() {
-        gameState = GameState.LOBBY_COUNTDOWN;
-        int countdownTime = 30; // 30秒倒计时
+    /**
+     * 位置转字符串
+     */
+    private String locationToString(Location location) {
+        if (location == null) return null;
+        return location.getWorld().getName() + "," + 
+               location.getX() + "," + 
+               location.getY() + "," + 
+               location.getZ() + "," + 
+               location.getYaw() + "," + 
+               location.getPitch();
+    }
+    
+    /**
+     * 字符串转位置
+     */
+    private Location stringToLocation(String str) {
+        if (str == null || str.isEmpty()) return null;
         
-        broadcastMessage(ChatColor.GREEN + "=== 游戏即将开始 ===");
-        broadcastMessage(ChatColor.YELLOW + "倒计时: " + countdownTime + " 秒");
+        String[] parts = str.split(",");
+        if (parts.length != 6) return null;
         
-        countdownTask = new BukkitRunnable() {
-            int timeLeft = countdownTime;
+        try {
+            World world = Bukkit.getWorld(parts[0]);
+            if (world == null) return null;
             
-            @Override
-            public void run() {
-                if (playersInGame.size() < configManager.getMinPlayers()) {
-                    broadcastMessage(ChatColor.RED + "玩家不足，倒计时取消");
-                    gameState = GameState.LOBBY_WAITING;
-                    this.cancel();
-                    return;
-                }
-                
-                if (timeLeft <= 0) {
-                    startGame();
-                    this.cancel();
-                    return;
-                }
-                
-                // 每10秒或最后10秒提示
-                if (timeLeft <= 10 || timeLeft % 10 == 0) {
-                    broadcastMessage(ChatColor.YELLOW + "游戏开始倒计时: " + timeLeft + " 秒");
-                    playSound(Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f);
-                }
-                
-                timeLeft--;
-            }
-        }.runTaskTimer(plugin, 0L, 20L); // 每秒执行一次
-    }
-    
-    private void startGame() {
-        gameState = GameState.IN_PROGRESS;
-        gameTimeLeft = configManager.getGameTime();
-        outlineTimer = configManager.getOutlineInterval();
-        
-        // 分配角色
-        assignRoles();
-        
-        // 传送玩家到游戏场地
-        teleportPlayersToGame();
-        
-        // 给予初始物品
-        giveInitialItems();
-        
-        // 开始游戏计时器
-        startGameTimer();
-        
-        // 开始轮廓显示计时器
-        startOutlineTimer();
-        
-        broadcastMessage(ChatColor.RED + "=== 游戏开始！ ===");
-        broadcastMessage(ChatColor.YELLOW + "杀手: " + getKillerNames());
-        broadcastMessage(ChatColor.GREEN + "求生者: " + getSurvivorNames());
-        broadcastMessage(ChatColor.AQUA + "游戏时间: " + formatTime(gameTimeLeft));
-        playSound(Sound.ENTITY_ENDER_DRAGON_GROWL, 1.0f);
-    }
-    
-    private void assignRoles() {
-        List<UUID> players = new ArrayList<>(playersInGame);
-        Collections.shuffle(players);
-        
-        // 确定杀手数量
-        int killerCount = (players.size() >= configManager.getKillerThreshold()) ? 2 : 1;
-        
-        // 分配杀手
-        for (int i = 0; i < killerCount && i < players.size(); i++) {
-            UUID killerId = players.get(i);
-            killers.add(killerId);
-            playerManager.setPlayerRole(killerId, PlayerRole.KILLER);
+            double x = Double.parseDouble(parts[1]);
+            double y = Double.parseDouble(parts[2]);
+            double z = Double.parseDouble(parts[3]);
+            float yaw = Float.parseFloat(parts[4]);
+            float pitch = Float.parseFloat(parts[5]);
             
-            Player killer = Bukkit.getPlayer(killerId);
-            if (killer != null) {
-                killer.sendMessage(ChatColor.RED + "你是杀手！击杀所有求生者获胜！");
-                playerManager.getPlayerData(killerId).applyGameSettings(killer, PlayerRole.KILLER);
-            }
+            return new Location(world, x, y, z, yaw, pitch);
+        } catch (NumberFormatException e) {
+            return null;
         }
+    }
+    
+    /**
+     * 区域类
+     */
+    public static class Region {
+        private final Location pos1;
+        private final Location pos2;
         
-        // 分配求生者
-        for (int i = killerCount; i < players.size(); i++) {
-            UUID survivorId = players.get(i);
-            survivors.add(survivorId);
-            playerManager.setPlayerRole(survivorId, PlayerRole.SURVIVOR);
-            
-            Player survivor = Bukkit.getPlayer(survivorId);
-            if (survivor != null) {
-                survivor.sendMessage(ChatColor.GREEN + "你是求生者！生存 " + formatTime(configManager.getGameTime()) + " 或击杀杀手获胜！");
-                playerManager.getPlayerData(survivorId).applyGameSettings(survivor, PlayerRole.SURVIVOR);
-            }
-        }
-    }
-    
-    private void teleportPlayersToGame() {
-        for (UUID playerId : playersInGame) {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null) {
-                PlayerRole role = playerManager.getPlayerRole(playerId);
-                Location spawn = null;
-                
-                if (role == PlayerRole.KILLER) {
-                    spawn = mapManager.getRandomKillerSpawn();
-                } else if (role == PlayerRole.SURVIVOR) {
-                    spawn = mapManager.getRandomSurvivorSpawn();
-                }
-                
-                if (spawn != null) {
-                    player.teleport(spawn);
-                }
-            }
-        }
-    }
-    
-    private void giveInitialItems() {
-        // 给予杀手初始武器
-        for (UUID killerId : killers) {
-            Player killer = Bukkit.getPlayer(killerId);
-            if (killer != null) {
-                itemManager.giveKillerItems(killer);
-            }
-        }
-        
-        // 在资源点生成物品
-        mapManager.spawnResources(itemManager);
-    }
-    
-    private void startGameTimer() {
-        gameTimerTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (gameState != GameState.IN_PROGRESS) {
-                    this.cancel();
-                    return;
-                }
-                
-                gameTimeLeft--;
-                
-                // 更新求生者的生存时间
-                for (UUID survivorId : survivors) {
-                    PlayerData data = playerManager.getPlayerData(survivorId);
-                    if (data != null && data.isAlive()) {
-                        data.addSurvivalTime(1);
-                    }
-                }
-                
-                // 每60秒或最后60秒提示时间
-                if (gameTimeLeft <= 60 || gameTimeLeft % 60 == 0) {
-                    broadcastMessage(ChatColor.AQUA + "剩余时间: " + formatTime(gameTimeLeft));
-                    
-                    if (gameTimeLeft <= 30) {
-                        playSound(Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f);
-                    }
-                }
-                
-                // 检查游戏结束条件
-                checkGameEnd();
-                
-                // 时间到，求生者获胜
-                if (gameTimeLeft <= 0) {
-                    endGame(true); // 求生者获胜
-                    this.cancel();
-                }
-            }
-        }.runTaskTimer(plugin, 0L, 20L); // 每秒执行一次
-    }
-    
-    private void startOutlineTimer() {
-        outlineTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (gameState != GameState.IN_PROGRESS) {
-                    this.cancel();
-                    return;
-                }
-                
-                outlineTimer--;
-                
-                if (outlineTimer <= 0) {
-                    toggleOutline();
-                    outlineTimer = outlineActive ? 
-                        configManager.getOutlineDuration() : 
-                        configManager.getOutlineInterval();
-                }
-            }
-        }.runTaskTimer(plugin, 0L, 20L); // 每秒执行一次
-    }
-    
-    private void toggleOutline() {
-        outlineActive = !outlineActive;
-        
-        if (outlineActive) {
-            // 显示轮廓
-            for (UUID killerId : killers) {
-                Player killer = Bukkit.getPlayer(killerId);
-                if (killer != null && killer.isOnline()) {
-                    killer.setGlowing(true);
-                    killer.sendMessage(ChatColor.RED + "你的轮廓已被所有玩家看到！");
-                }
+        public Region(Location pos1, Location pos2) {
+            if (!pos1.getWorld().equals(pos2.getWorld())) {
+                throw new IllegalArgumentException("两个位置必须在同一个世界");
             }
             
-            broadcastMessage(ChatColor.YELLOW + "杀手轮廓已显示，持续 " + configManager.getOutlineDuration() + " 秒");
-            playSound(Sound.BLOCK_BELL_USE, 1.0f);
-        } else {
-            // 隐藏轮廓
-            for (UUID killerId : killers) {
-                Player killer = Bukkit.getPlayer(killerId);
-                if (killer != null) {
-                    killer.setGlowing(false);
-                }
+            this.pos1 = new Location(
+                pos1.getWorld(),
+                Math.min(pos1.getX(), pos2.getX()),
+                Math.min(pos1.getY(), pos2.getY()),
+                Math.min(pos1.getZ(), pos2.getZ())
+            );
+            
+            this.pos2 = new Location(
+                pos2.getWorld(),
+                Math.max(pos1.getX(), pos2.getX()),
+                Math.max(pos1.getY(), pos2.getY()),
+                Math.max(pos1.getZ(), pos2.getZ())
+            );
+        }
+        
+        public boolean contains(Location location) {
+            if (!location.getWorld().equals(pos1.getWorld())) {
+                return false;
             }
             
-            broadcastMessage(ChatColor.YELLOW + "杀手轮廓已隐藏");
-        }
-    }
-    
-    public void playerDeath(Player player) {
-        UUID playerId = player.getUniqueId();
-        PlayerData data = playerManager.getPlayerData(playerId);
-        
-        if (data == null || !data.isAlive()) {
-            return;
-        }
-        
-        data.setAlive(false);
-        
-        // 检查击杀者
-        Player killer = player.getKiller();
-        if (killer != null) {
-            PlayerData killerData = playerManager.getPlayerData(killer.getUniqueId());
-            if (killerData != null) {
-                killerData.addKill();
-                killer.sendMessage(ChatColor.GREEN + "你击杀了 " + player.getName());
-            }
-        }
-        
-        // 根据角色处理
-        PlayerRole role = data.getRole();
-        
-        if (role == PlayerRole.SURVIVOR) {
-            survivors.remove(playerId);
-            spectators.add(playerId);
-            playerManager.setPlayerRole(playerId, PlayerRole.SPECTATOR);
+            double x = location.getX();
+            double y = location.getY();
+            double z = location.getZ();
             
-            // 设置观战模式
-            player.setGameMode(org.bukkit.GameMode.SPECTATOR);
-            player.sendMessage(ChatColor.GRAY + "你已死亡，进入观战模式");
-            
-            // 跟随随机存活的求生者
-            followRandomSurvivor(player);
-            
-        } else if (role == PlayerRole.KILLER) {
-            killers.remove(playerId);
-            spectators.add(playerId);
-            playerManager.setPlayerRole(playerId, PlayerRole.SPECTATOR);
-            
-            player.setGameMode(org.bukkit.GameMode.SPECTATOR);
-            player.sendMessage(ChatColor.GRAY + "你已死亡，进入观战模式");
-            
-            // 杀手死亡，跟随随机求生者
-            followRandomSurvivor(player);
+            return x >= pos1.getX() && x <= pos2.getX() &&
+                   y >= pos1.getY() && y <= pos2.getY() &&
+                   z >= pos1.getZ() && z <= pos2.getZ();
         }
         
-        broadcastMessage(ChatColor.RED + player.getName() + " 已被" + 
-                        (killer != null ? killer.getName() + " 击杀" : "淘汰"));
+        public Location getPos1() {
+            return pos1.clone();
+        }
         
-        // 检查游戏是否结束
-        checkGameEnd();
-    }
-    
-    private void followRandomSurvivor(Player spectator) {
-        List<UUID> aliveSurvivors = survivors.stream()
-            .filter(id -> {
-                Player p = Bukkit.getPlayer(id);
-                return p != null && p.isOnline() && playerManager.getPlayerData(id).isAlive();
-            })
-            .collect(Collectors.toList());
-        
-        if (!aliveSurvivors.isEmpty()) {
-            Collections.shuffle(aliveSurvivors);
-            Player target = Bukkit.getPlayer(aliveSurvivors.get(0));
-            if (target != null) {
-                spectator.teleport(target.getLocation());
-                spectator.sendMessage(ChatColor.GRAY + "正在观战: " + target.getName());
-            }
+        public Location getPos2() {
+            return pos2.clone();
         }
     }
-    
-    private void checkGameEnd() {
-        if (gameState != GameState.IN_PROGRESS) {
-            return;
-        }
-        
-        // 检查杀手是否全部死亡
-        boolean allKillersDead = true;
-        for (UUID killerId : killers) {
-            PlayerData data = playerManager.getPlayerData(killerId);
-            if (data != null && data.isAlive()) {
-                allKillersDead = false;
-                break;
-            }
-        }
-        
-        // 检查求生者是否全部死亡
-        boolean allSurvivorsDead = true;
-        for (UUID survivorId : survivors) {
-            PlayerData data = playerManager.getPlayerData(survivorId);
-            if (data != null && data.isAlive()) {
-                allSurvivorsDead = false;
-                break;
-            }
-        }
-        
-        // 游戏结束条件
-        if (allKillersDead) {
-            endGame(true); // 求生者获胜（杀手全灭）
-        } else if (allSurvivorsDead) {
-            endGame(false); // 杀手获胜（求生者全灭）
-        }
-    }
-    
-    private void endGame(boolean survivorsWin) {
-        gameState = GameState.ENDING;
-        
-        // 取消所有任务
-        if (gameTimerTask != null) {
-            gameTimerTask.cancel();
-        }
-        if (outlineTask != null) {
-            outlineTask.cancel();
-        }
-        if (countdownTask != null) {
-            countdownTask.cancel();
-        }
-        
-        // 隐藏所有轮廓
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            player.setGlowing(false);
-        }
-        
-        // 宣布获胜者
-        if (survivorsWin) {
-            broadcastMessage(ChatColor.GREEN + "=== 游戏结束！求生者获胜！ ===");
-            playSound(Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f);
-        } else {
-            broadcastMessage(ChatColor.RED + "=== 游戏结束！杀手获胜！ ===");
-            playSound(Sound.ENTITY_WITHER_DEATH, 1.0f);
-        }
-        
-        // 显示统计信息
-        showGameStats(survivorsWin);
-        
-        // 5秒后重置游戏
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                resetGame();
-            }
-        }.runTaskLater(plugin, 100L); // 5秒后
-    }
-    
-    private void showGameStats(boolean survivorsWin) {
-        broadcastMessage(ChatColor.YELLOW + "=== 游戏统计 ===");
-        
-        // 杀手统计
-        broadcastMessage(ChatColor.RED + "杀手:");
-        for (UUID killerId : killers) {
-            Player killer = Bukkit.getPlayer(killerId);
-            PlayerData data = playerManager.getPlayerData(killerId);
-            if (killer != null && data != null) {
-                broadcastMessage(ChatColor.RED + "  " + killer.getName() + 
-                               " - 击杀: " + data.getKills() + 
-                               " 伤害: " + data.getDamageDealt());
-            }
-        }
-        
-        // 求生者统计
-        broadcastMessage(ChatColor.GREEN + "求生者:");
-        for (UUID survivorId : survivors) {
-            Player survivor = Bukkit.getPlayer(survivorId);
-            PlayerData data = playerManager.getPlayerData(survivorId);
-            if (survivor != null && data != null) {
-                broadcastMessage(ChatColor.GREEN + "  " + survivor.getName() + 
-                               " - 生存时间: " + formatTime(data.getSurvivalTime()) + 
-                               " 助攻: " + data.getAssists());
-            }
-        }
-    }
-    
-    private void resetGame() {
-        // 恢复所有玩家状态
-        for (UUID playerId : playersInGame) {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null) {
-                playerManager.getPlayerData(playerId).restoreOriginalState(player);
-            }
-        }
-        
-        // 清空所有列表
-        playersInGame.clear();
-        killers.clear();
-        survivors.clear();
-        spectators.clear();
-        
-        // 重置所有玩家角色
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            playerManager.setPlayerRole(player.getUniqueId(), PlayerRole.NONE);
-        }
-        
-        // 重置游戏状态
-        gameState = GameState.DISABLED;
-        gameTimeLeft = 0;
-        outlineTimer = 0;
-        outlineActive = false;
-        
-        broadcastMessage(ChatColor.YELLOW + "游戏已重置，可以重新开始");
-    }
-    
-    // 工具方法
-    private void broadcastMessage(String message) {
-        for (UUID playerId : playersInGame) {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null && player.isOnline()) {
-                player.sendMessage(message);
-            }
-        }
-    }
-    
-    private void playSound(Sound sound, float volume) {
-        for (UUID playerId : playersInGame) {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null && player.isOnline()) {
-                player.playSound(player.getLocation(), sound, volume, 1.0f);
-            }
-        }
-    }
-    
-    private String getKillerNames() {
-        return killers.stream()
-            .map(id -> Bukkit.getPlayer(id))
-            .filter(Objects::nonNull)
-            .map(Player::getName)
-            .collect(Collectors.joining(", "));
-    }
-    
-    private String getSurvivorNames() {
-        return survivors.stream()
-            .map(id -> Bukkit.getPlayer(id))
-            .filter(Objects::nonNull)
-            .map(Player::getName)
-            .collect(Collectors.joining(", "));
-    }
-    
-    private String formatTime(int seconds) {
-        int minutes = seconds / 60;
-        int secs = seconds % 60;
-        return String.format("%02d:%02d", minutes, secs);
-    }
-    
-    // Getter 方法
-    public GameState getGameState() { return gameState; }
-    public List<UUID> getPlayersInGame() { return playersInGame; }
-    public List<UUID> getKillers() { return killers; }
-    public List<UUID> getSurvivors() { return survivors; }
-    public List<UUID> getSpectators() { return spectators; }
-    public int getGameTimeLeft() { return gameTimeLeft; }
-    public boolean isOutlineActive() { return outlineActive; }
 }
